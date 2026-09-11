@@ -25,8 +25,8 @@ import kotlin.math.max
 fun BarcodeCamera(
     enabled: Boolean,
     onCode: (String) -> Unit,
-    scanWidthFraction: Float = 0.68f,
-    scanHeightFraction: Float = 90f / 380f
+    scanWidthFraction: Float = 0.16f,
+    scanHeightFraction: Float = 0.16f
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val executor = remember { Executors.newSingleThreadExecutor() }
@@ -118,24 +118,21 @@ fun BarcodeCamera(
                                 sourceHeight = image.height.toFloat()
                             }
 
-                            // PreviewView uses FILL_CENTER, so the camera image is scaled to fill
-                            // the view and any overflow is cropped equally on opposite sides.
                             val scale = max(viewWidth / sourceWidth, viewHeight / sourceHeight)
                             val displayedWidth = sourceWidth * scale
                             val displayedHeight = sourceHeight * scale
                             val offsetX = (viewWidth - displayedWidth) / 2f
                             val offsetY = (viewHeight - displayedHeight) / 2f
 
-                            // These bounds are the exact same centered fractions as the visible
-                            // white frame drawn by ScanScreen (68% wide, 90dp inside 380dp high).
-                            val frameWidth = viewWidth * scanWidthState
-                            val frameHeight = viewHeight * scanHeightState
-                            val frameLeft = (viewWidth - frameWidth) / 2f
-                            val frameRight = frameLeft + frameWidth
-                            val frameTop = (viewHeight - frameHeight) / 2f
-                            val frameBottom = frameTop + frameHeight
-                            val frameCenterX = viewWidth / 2f
-                            val frameCenterY = viewHeight / 2f
+                            // Detection is centered on the visible crosshair.
+                            val targetWidth = viewWidth * scanWidthState
+                            val targetHeight = viewHeight * scanHeightState
+                            val targetLeft = (viewWidth - targetWidth) / 2f
+                            val targetRight = targetLeft + targetWidth
+                            val targetTop = (viewHeight - targetHeight) / 2f
+                            val targetBottom = targetTop + targetHeight
+                            val targetCenterX = viewWidth / 2f
+                            val targetCenterY = viewHeight / 2f
 
                             val best = barcodes
                                 .mapNotNull { barcode ->
@@ -145,14 +142,14 @@ fun BarcodeCamera(
                                     val xView = box.exactCenterX() * scale + offsetX
                                     val yView = box.exactCenterY() * scale + offsetY
 
-                                    if (xView < frameLeft || xView > frameRight ||
-                                        yView < frameTop || yView > frameBottom
+                                    if (xView < targetLeft || xView > targetRight ||
+                                        yView < targetTop || yView > targetBottom
                                     ) {
                                         return@mapNotNull null
                                     }
 
-                                    val dx = xView - frameCenterX
-                                    val dy = yView - frameCenterY
+                                    val dx = xView - targetCenterX
+                                    val dy = yView - targetCenterY
                                     Triple(raw, dx * dx + dy * dy, barcode)
                                 }
                                 .minByOrNull { it.second }
