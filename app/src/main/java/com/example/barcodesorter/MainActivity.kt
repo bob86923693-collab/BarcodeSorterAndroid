@@ -13,7 +13,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -109,13 +108,14 @@ fun ScanScreen(vm: MainViewModel) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { cameraGranted = it }
+
     LaunchedEffect(Unit) {
         if (!cameraGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
     var expanded by remember { mutableStateOf(false) }
     var status by remember {
-        mutableStateOf(if (areas.isEmpty()) "請先到「區域」新增分類" else "對準條碼掃描")
+        mutableStateOf(if (areas.isEmpty()) "請先到「區域」新增分類" else "將條碼中心對準十字")
     }
     var scannerEnabled by remember { mutableStateOf(true) }
     var pendingCode by remember { mutableStateOf<String?>(null) }
@@ -126,7 +126,7 @@ fun ScanScreen(vm: MainViewModel) {
     var lastAt by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(areas.size) {
-        status = if (areas.isEmpty()) "請先到「區域」新增分類" else "對準條碼掃描"
+        status = if (areas.isEmpty()) "請先到「區域」新增分類" else "將條碼中心對準十字"
     }
 
     fun feedback() {
@@ -221,7 +221,7 @@ fun ScanScreen(vm: MainViewModel) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(380.dp)
                 .background(Color.Black)
         ) {
             if (cameraGranted) {
@@ -260,22 +260,32 @@ fun ScanScreen(vm: MainViewModel) {
                     }
                 )
 
-                Surface(
+                Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .fillMaxWidth(0.68f)
-                        .height(90.dp),
-                    color = Color.Transparent,
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(3.dp, Color.White)
-                ) { }
+                        .size(60.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        Modifier
+                            .width(44.dp)
+                            .height(3.dp)
+                            .background(Color.White, RoundedCornerShape(2.dp))
+                    )
+                    Box(
+                        Modifier
+                            .width(3.dp)
+                            .height(44.dp)
+                            .background(Color.White, RoundedCornerShape(2.dp))
+                    )
+                }
 
                 Text(
-                    if (areas.isEmpty()) "請先新增分類" else "將條碼置於框內",
+                    if (areas.isEmpty()) "請先新增分類" else "將條碼中心對準十字",
                     color = Color.White,
                     modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(top = 130.dp)
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 18.dp)
                         .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 )
@@ -454,9 +464,9 @@ fun AreasScreen(vm: MainViewModel) {
         if (uri != null) {
             scope.launch {
                 val csv = buildString {
-                    appendLine("barcode,area,scanned_at")
+                    appendLine("barcode,area")
                     vm.exportRows().forEach { r ->
-                        appendLine("${csvEscape(r.code)},${csvEscape(r.area)},${csvEscape(formatTime(r.scannedAt))}")
+                        appendLine("${csvEscape(r.code)},${csvEscape(r.area)}")
                     }
                 }
                 context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(csv) }
