@@ -18,17 +18,22 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
+import kotlin.math.max
 
 @SuppressLint("UnsafeOptInUsageError")
 @Composable
 fun BarcodeCamera(
     enabled: Boolean,
-    onCode: (String) -> Unit
+    onCode: (String) -> Unit,
+    scanWidthFraction: Float = 0.68f,
+    scanHeightFraction: Float = 90f / 380f
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val executor = remember { Executors.newSingleThreadExecutor() }
     val onCodeState by rememberUpdatedState(onCode)
     val enabledState by rememberUpdatedState(enabled)
+    val scanWidthState by rememberUpdatedState(scanWidthFraction)
+    val scanHeightState by rememberUpdatedState(scanHeightFraction)
 
     DisposableEffect(Unit) {
         onDispose { executor.shutdown() }
@@ -94,36 +99,65 @@ fun BarcodeCamera(
                     }
 
                     busy = true
-                    val input = InputImage.fromMediaImage(
-                        image,
-                        proxy.imageInfo.rotationDegrees
-                    )
+                    val rotation = proxy.imageInfo.rotationDegrees
+                    val input = InputImage.fromMediaImage(image, rotation)
 
                     scanner.process(input)
                         .addOnSuccessListener { barcodes ->
-                            val frameLeft = input.width * 0.16f
-                            val frameRight = input.width * 0.84f
-                            val frameTop = input.height * 0.35f
-                            val frameBottom = input.height * 0.65f
-                            val centerX = input.width / 2f
-                            val centerY = input.height / 2f
+                            val viewWidth = previewView.width.toFloat()
+                            val viewHeight = previewView.height.toFloat()
+                            if (viewWidth <= 0f || viewHeight <= 0f) return@addOnSuccessListener
+
+                            val sourceWidth: Float
+                            val sourceHeight: Float
+                            if (rotation == 90 || rotation == 270) {
+                                sourceWidth = image.height.toFloat()
+                                sourceHeight = image.width.toFloat()
+                            } else {
+                                sourceWidth = image.width.toFloat()
+                                sourceHeight = image.height.toFloat()
+                            }
+
+                            // PreviewView uses FILL_CENTER, so the camera image is scaled to fill
+                            // the view and any overflow is cropped equally on opposite sides.
+                            val scale = max(viewWidth / sourceWidth, viewHeight / sourceHeight)
+                            val displayedWidth = sourceWidth * scale
+                            val displayedHeight = sourceHeight * scale
+                            val offsetX = (viewWidth - displayedWidth) / 2f
+                            val offsetY = (viewHeight - displayedHeight) / 2f
+
+                            // These bounds are the exact same centered fractions as the visible
+                            // white frame drawn by ScanScreen (68% wide, 90dp inside 380dp high).
+                            val frameWidth = viewWidth * scanWidthState
+                            val frameHeight = viewHeight * scanHeightState
+                            val frameLeft = (viewWidth - frameWidth) / 2f
+                            val frameRight = frameLeft + frameWidth
+                            val frameTop = (viewHeight - frameHeight) / 2f
+                            val frameBottom = frameTop + frameHeight
+                            val frameCenterX = viewWidth / 2f
+                            val frameCenterY = viewHeight / 2f
 
                             val best = barcodes
                                 .mapNotNull { barcode ->
+                                    val raw = barcode.rawValue ?: return@mapNotNull null
                                     val box = barcode.boundingBox ?: return@mapNotNull null
-                                    val x = box.exactCenterX()
-                                    val y = box.exactCenterY()
-                                    if (x < frameLeft || x > frameRight || y < frameTop || y > frameBottom) {
+
+                                    val xView = box.exactCenterX() * scale + offsetX
+                                    val yView = box.exactCenterY() * scale + offsetY
+
+                                    if (xView < frameLeft || xView > frameRight ||
+                                        yView < frameTop || yView > frameBottom
+                                    ) {
                                         return@mapNotNull null
                                     }
-                                    val dx = x - centerX
-                                    val dy = y - centerY
-                                    Triple(barcode, dx * dx + dy * dy, barcode.rawValue)
+
+                                    val dx = xView - frameCenterX
+                                    val dy = yView - frameCenterY
+                                    Triple(raw, dx * dx + dy * dy, barcode)
                                 }
-                                .filter { it.third != null }
                                 .minByOrNull { it.second }
 
-                            best?.third?.let { onCodeState(it!!) }
+                            best?.first?.let(onCodeState)
                         }
                         .addOnCompleteListener {
                             busy = false
