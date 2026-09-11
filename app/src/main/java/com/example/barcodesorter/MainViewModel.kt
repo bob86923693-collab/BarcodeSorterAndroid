@@ -25,13 +25,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val areas = dao.observeAreas()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _selectedArea = MutableStateFlow("BB01")
+    private val _selectedArea = MutableStateFlow("")
     val selectedArea = _selectedArea.asStateFlow()
 
     init {
         viewModelScope.launch {
-            listOf("BB01", "BB02", "BR16").forEach {
-                dao.addArea(AreaEntity(it))
+            areas.collect { currentAreas ->
+                val selected = _selectedArea.value
+                if (selected.isBlank() || currentAreas.none { it.name == selected }) {
+                    _selectedArea.value = currentAreas.firstOrNull()?.name ?: ""
+                }
             }
         }
     }
@@ -43,7 +46,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun addArea(raw: String) {
         val name = raw.trim().uppercase()
         if (name.isBlank()) return
-        viewModelScope.launch { dao.addArea(AreaEntity(name)) }
+        viewModelScope.launch {
+            dao.addArea(AreaEntity(name))
+            _selectedArea.value = name
+        }
     }
 
     fun deleteArea(name: String, deleteContents: Boolean = true) {
@@ -51,7 +57,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (deleteContents) dao.deleteByArea(name)
             dao.deleteArea(name)
             if (_selectedArea.value == name) {
-                _selectedArea.value = areas.value.firstOrNull { it.name != name }?.name ?: ""
+                _selectedArea.value = ""
             }
         }
     }
@@ -60,8 +66,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val code = codeRaw.trim()
         if (code.isBlank()) return ScanResult("", "讀不到條碼")
 
-        val current = dao.find(code)
         val target = selectedArea.value
+        if (target.isBlank()) {
+            return ScanResult(code, "請先新增並選擇一個區域")
+        }
+
+        val current = dao.find(code)
 
         if (current == null) {
             return ScanResult(
@@ -89,12 +99,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     suspend fun confirmAdd(code: String): ScanResult {
         val target = selectedArea.value
+        if (target.isBlank()) return ScanResult(code, "請先新增並選擇一個區域")
         dao.upsert(BarcodeItem(code = code, area = target))
         return ScanResult(code, "$code → $target 已加入")
     }
 
     suspend fun move(code: String): ScanResult {
         val target = selectedArea.value
+        if (target.isBlank()) return ScanResult(code, "請先新增並選擇一個區域")
         dao.upsert(BarcodeItem(code = code, area = target))
         return ScanResult(code, "$code 已移到 $target")
     }
