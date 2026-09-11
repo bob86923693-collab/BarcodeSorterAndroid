@@ -23,6 +23,9 @@ jobs:
         with:
           gradle-version: '8.9'
 
+      - name: Expand camera preview
+        run: sed -i 's/\.height(300\.dp)/.height(380.dp)/' app/src/main/java/com/example/barcodesorter/MainActivity.kt
+
       - name: Build debug APK
         run: gradle :app:assembleDebug
 
