@@ -20,6 +20,9 @@ interface BarcodeDao {
     @Query("DELETE FROM barcodes WHERE code = :code")
     suspend fun delete(code: String)
 
+    @Query("DELETE FROM barcodes WHERE area = :area")
+    suspend fun deleteByArea(area: String)
+
     @Query("SELECT * FROM areas ORDER BY name")
     fun observeAreas(): Flow<List<AreaEntity>>
 
