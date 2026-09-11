@@ -101,7 +101,29 @@ fun BarcodeCamera(
 
                     scanner.process(input)
                         .addOnSuccessListener { barcodes ->
-                            barcodes.firstOrNull()?.rawValue?.let(onCodeState)
+                            val frameLeft = input.width * 0.16f
+                            val frameRight = input.width * 0.84f
+                            val frameTop = input.height * 0.35f
+                            val frameBottom = input.height * 0.65f
+                            val centerX = input.width / 2f
+                            val centerY = input.height / 2f
+
+                            val best = barcodes
+                                .mapNotNull { barcode ->
+                                    val box = barcode.boundingBox ?: return@mapNotNull null
+                                    val x = box.exactCenterX()
+                                    val y = box.exactCenterY()
+                                    if (x < frameLeft || x > frameRight || y < frameTop || y > frameBottom) {
+                                        return@mapNotNull null
+                                    }
+                                    val dx = x - centerX
+                                    val dy = y - centerY
+                                    Triple(barcode, dx * dx + dy * dy, barcode.rawValue)
+                                }
+                                .filter { it.third != null }
+                                .minByOrNull { it.second }
+
+                            best?.third?.let { onCodeState(it!!) }
                         }
                         .addOnCompleteListener {
                             busy = false
