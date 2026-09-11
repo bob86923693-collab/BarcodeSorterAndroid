@@ -10,7 +10,9 @@ import kotlinx.coroutines.launch
 data class ScanResult(
     val code: String,
     val message: String,
+    val needsAddConfirm: Boolean = false,
     val needsMoveConfirm: Boolean = false,
+    val isDuplicate: Boolean = false,
     val oldArea: String? = null
 )
 
@@ -44,9 +46,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { dao.addArea(AreaEntity(name)) }
     }
 
-    fun deleteArea(name: String) {
+    fun deleteArea(name: String, deleteContents: Boolean = true) {
         viewModelScope.launch {
-            if (dao.countArea(name) == 0) dao.deleteArea(name)
+            if (deleteContents) dao.deleteByArea(name)
+            dao.deleteArea(name)
+            if (_selectedArea.value == name) {
+                _selectedArea.value = areas.value.firstOrNull { it.name != name }?.name ?: ""
+            }
         }
     }
 
@@ -58,12 +64,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val target = selectedArea.value
 
         if (current == null) {
-            dao.upsert(BarcodeItem(code = code, area = target))
-            return ScanResult(code, "$code → $target 已儲存")
+            return ScanResult(
+                code = code,
+                message = "掃描到 $code，是否加入 $target？",
+                needsAddConfirm = true
+            )
         }
 
         if (current.area == target) {
-            return ScanResult(code, "$code 已經在 $target")
+            return ScanResult(
+                code = code,
+                message = "重複掃描：$code 已經在 $target",
+                isDuplicate = true
+            )
         }
 
         return ScanResult(
@@ -72,6 +85,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             needsMoveConfirm = true,
             oldArea = current.area
         )
+    }
+
+    suspend fun confirmAdd(code: String): ScanResult {
+        val target = selectedArea.value
+        dao.upsert(BarcodeItem(code = code, area = target))
+        return ScanResult(code, "$code → $target 已加入")
     }
 
     suspend fun move(code: String): ScanResult {
