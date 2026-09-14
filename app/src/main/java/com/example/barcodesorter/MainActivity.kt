@@ -124,6 +124,7 @@ fun ScanScreen(vm: MainViewModel) {
     var duplicateCode by remember { mutableStateOf<String?>(null) }
     var lastCode by remember { mutableStateOf("") }
     var lastAt by remember { mutableLongStateOf(0L) }
+    var manualCode by remember { mutableStateOf("") }
 
     LaunchedEffect(areas.size) {
         status = if (areas.isEmpty()) "請先到「區域」新增分類" else "將條碼中心對準十字"
@@ -143,6 +144,40 @@ fun ScanScreen(vm: MainViewModel) {
                     .vibrate(VibrationEffect.createOneShot(80, VibrationEffect.DEFAULT_AMPLITUDE))
             }
         } catch (_: Exception) { }
+    }
+
+    fun handleCode(codeRaw: String, debounce: Boolean) {
+        val code = codeRaw.trim()
+        if (code.isBlank()) return
+
+        val now = System.currentTimeMillis()
+        if (debounce && code == lastCode && now - lastAt < 1600) return
+        lastCode = code
+        lastAt = now
+        scannerEnabled = false
+
+        scope.launch {
+            val result = vm.classify(code)
+            status = result.message
+            when {
+                result.needsAddConfirm -> {
+                    pendingCode = result.code
+                    pendingAdd = true
+                }
+                result.needsMoveConfirm -> {
+                    pendingCode = result.code
+                    pendingOldArea = result.oldArea
+                }
+                result.isDuplicate -> {
+                    duplicateCode = result.code
+                    feedback()
+                }
+                else -> {
+                    delay(400)
+                    scannerEnabled = true
+                }
+            }
+        }
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -228,36 +263,7 @@ fun ScanScreen(vm: MainViewModel) {
                 BarcodeCamera(
                     enabled = areas.isNotEmpty() && selectedArea.isNotBlank() &&
                         scannerEnabled && pendingCode == null && duplicateCode == null,
-                    onCode = { code ->
-                        val now = System.currentTimeMillis()
-                        if (code == lastCode && now - lastAt < 1600) return@BarcodeCamera
-                        lastCode = code
-                        lastAt = now
-                        scannerEnabled = false
-
-                        scope.launch {
-                            val result = vm.classify(code)
-                            status = result.message
-                            when {
-                                result.needsAddConfirm -> {
-                                    pendingCode = result.code
-                                    pendingAdd = true
-                                }
-                                result.needsMoveConfirm -> {
-                                    pendingCode = result.code
-                                    pendingOldArea = result.oldArea
-                                }
-                                result.isDuplicate -> {
-                                    duplicateCode = result.code
-                                    feedback()
-                                }
-                                else -> {
-                                    delay(400)
-                                    scannerEnabled = true
-                                }
-                            }
-                        }
-                    }
+                    onCode = { code -> handleCode(code, debounce = true) }
                 )
 
                 Box(
@@ -301,9 +307,38 @@ fun ScanScreen(vm: MainViewModel) {
             status,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             style = MaterialTheme.typography.titleMedium
         )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = manualCode,
+                onValueChange = { manualCode = it },
+                label = { Text("手動輸入條碼") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(8.dp))
+            FilledIconButton(
+                enabled = manualCode.isNotBlank() && areas.isNotEmpty() && selectedArea.isNotBlank() &&
+                    pendingCode == null && duplicateCode == null,
+                onClick = {
+                    val code = manualCode.trim()
+                    if (code.isNotBlank()) {
+                        manualCode = ""
+                        handleCode(code, debounce = false)
+                    }
+                }
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "加入條碼")
+            }
+        }
     }
 
     if (pendingCode != null && pendingAdd) {
