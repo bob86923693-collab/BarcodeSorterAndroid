@@ -522,10 +522,13 @@ fun AreasScreen(vm: MainViewModel) {
                 modifier = Modifier.weight(1f)
             )
             Spacer(Modifier.width(8.dp))
-            FilledIconButton(onClick = {
-                vm.addArea(newArea)
-                newArea = ""
-            }) {
+            FilledIconButton(
+                enabled = newArea.isNotBlank(),
+                onClick = {
+                    vm.addArea(newArea)
+                    newArea = ""
+                }
+            ) {
                 Icon(Icons.Default.Add, null)
             }
         }
