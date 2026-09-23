@@ -491,7 +491,7 @@ fun AreasScreen(vm: MainViewModel) {
     val allItems by vm.allItems.collectAsState()
     var newArea by remember { mutableStateOf("") }
     var expandedArea by remember { mutableStateOf<String?>(null) }
-    var areaToDelete by remember { mutableStateOf<String?>(null) }
+    var areaToDelete by remember { mutableStateOf<String?>(null) }\n    var duplicateArea by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
@@ -525,8 +525,13 @@ fun AreasScreen(vm: MainViewModel) {
             FilledIconButton(
                 enabled = newArea.isNotBlank(),
                 onClick = {
-                    vm.addArea(newArea)
-                    newArea = ""
+                    val name = newArea.trim().uppercase()
+                    if (areas.any { it.name == name }) {
+                        duplicateArea = name
+                    } else {
+                        vm.addArea(name)
+                        newArea = ""
+                    }
                 }
             ) {
                 Icon(Icons.Default.Add, null)
@@ -592,6 +597,20 @@ fun AreasScreen(vm: MainViewModel) {
                 }
             }
         }
+    }
+
+    if (duplicateArea != null) {
+        AlertDialog(
+            onDismissRequest = { duplicateArea = null },
+            icon = { Icon(Icons.Default.Warning, null) },
+            title = { Text("分類已存在") },
+            text = { Text("分類 ${duplicateArea} 已經存在，請使用其他名稱。") },
+            confirmButton = {
+                TextButton(onClick = { duplicateArea = null }) {
+                    Text("知道了")
+                }
+            }
+        )
     }
 
     if (areaToDelete != null) {
