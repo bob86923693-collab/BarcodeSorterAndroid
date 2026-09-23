@@ -491,7 +491,8 @@ fun AreasScreen(vm: MainViewModel) {
     val allItems by vm.allItems.collectAsState()
     var newArea by remember { mutableStateOf("") }
     var expandedArea by remember { mutableStateOf<String?>(null) }
-    var areaToDelete by remember { mutableStateOf<String?>(null) }\n    var duplicateArea by remember { mutableStateOf<String?>(null) }
+    var areaToDelete by remember { mutableStateOf<String?>(null) }
+    var duplicateArea by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv")
